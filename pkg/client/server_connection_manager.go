@@ -3,9 +3,12 @@ package client
 import (
 	"github.com/Nextsummer/micro-client/pkg/config"
 	pkgrpc "github.com/Nextsummer/micro-client/pkg/grpc"
+	"github.com/Nextsummer/micro-client/pkg/log"
 	"github.com/Nextsummer/micro-client/pkg/queue"
+	"github.com/Nextsummer/micro-client/pkg/utils"
 	"github.com/google/uuid"
 	cmap "github.com/orcaman/concurrent-map/v2"
+	"io"
 	"net"
 	"sync"
 )
@@ -21,7 +24,8 @@ func NewServerConnectionManager() *ServerConnectionManager {
 }
 
 func (s *ServerConnectionManager) addServerConnection(connection *ServerConnection) {
-	s.serverConnections.Set(connection.conn.RemoteAddr().String(), connection)
+	conn := connection.conn
+	s.serverConnections.Set(conn.RemoteAddr().String(), connection)
 }
 
 // Check whether a connection has been established to the server address
@@ -40,6 +44,22 @@ func NewServerConnection(conn net.Conn) *ServerConnection {
 		conn:         conn,
 		connectionId: uuid.New().String(),
 	}
+}
+
+func (s *ServerConnection) readMessage() (*pkgrpc.MessageResponse, bool) {
+	responseBodyBytes, err := utils.ReadByte(s.conn)
+
+	if err == io.EOF {
+		return nil, false
+	}
+	if err != nil {
+		log.Error.Println("Client network io process decode server response failed, err: ", err)
+		return nil, false
+	}
+	response := &pkgrpc.MessageResponse{}
+	_ = utils.Decode(responseBodyBytes, response)
+
+	return response, true
 }
 
 var serverMessageQueuesOnce sync.Once

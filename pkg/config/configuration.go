@@ -45,7 +45,7 @@ func (c *Configuration) Init(configPath string) {
 	for _, server := range serversArray {
 		serverSplit := strings.Split(server, ":")
 		port, _ := strconv.ParseInt(serverSplit[1], 10, 32)
-		c.ControllerCandidates.Put(Server{address: serverSplit[0], port: int32(port)})
+		c.ControllerCandidates.Put(Server{Address: serverSplit[0], Port: int32(port)})
 	}
 
 	c.ServiceName = validateServiceName(configMap[ServiceName])
@@ -99,25 +99,25 @@ func PrintConfigLog() {
 }
 
 type Server struct {
-	id      int32
-	address string
-	port    int32
+	Id      int32  `json:"id"`
+	Address string `json:"address"`
+	Port    int32  `json:"port"`
 }
 
 func NewServer(address string, port int32) *Server {
-	return &Server{address: address, port: port}
+	return &Server{Address: address, Port: port}
 }
 
 func (s *Server) GetRemoteSocketAddress() string {
-	return fmt.Sprintf("%s:%d", s.address, s.port)
+	return fmt.Sprintf("%s:%d", s.Address, s.Port)
 }
 
 func (s *Server) SetId(id int32) {
-	s.id = id
+	s.Id = id
 }
 
 func (s *Server) GetId() int32 {
-	return s.id
+	return s.Id
 }
 
 func (s *Server) String() string {

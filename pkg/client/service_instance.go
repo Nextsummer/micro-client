@@ -8,7 +8,6 @@ import (
 	"github.com/Nextsummer/micro-client/pkg/utils"
 	"github.com/google/uuid"
 	cmap "github.com/orcaman/concurrent-map/v2"
-	"io"
 	"net"
 	"strconv"
 	"strings"
@@ -59,6 +58,7 @@ func (s *ServiceInstance) Init() {
 
 	s.server = s.routeServer(config.GetConfigurationInstance().ServiceName)
 	if id != s.server.GetId() {
+		s.serverConnection.conn.Close()
 		s.serverConnection = s.connectServer(*s.server)
 	}
 }
@@ -100,17 +100,10 @@ func (s *ServiceInstance) networkIO() {
 				continue
 			}
 
-			responseBodyBytes, err := utils.ReadByte(s.serverConnection.conn)
-			if err == io.EOF {
-				return
+			response, ok := s.serverConnection.readMessage()
+			if !ok {
+				continue
 			}
-			if err != nil {
-				log.Error.Println("Client network io process decode server response failed, err: ", err)
-				return
-			}
-
-			response := &pkgrpc.MessageResponse{}
-			_ = utils.Decode(responseBodyBytes, response)
 			log.Info.Println("Receive to server response: ", utils.ToJson(response))
 			s.responses.Set(response.GetResult().GetRequestId(), response)
 		}
@@ -217,16 +210,9 @@ func (s *ServiceInstance) Register() bool {
 		ServiceInstanceIp:   configuration.ServiceInstanceIp,
 		ServiceInstancePort: configuration.ServiceInstancePort,
 	}))
-	GetServerMessageQueuesInstance().putRequest(s.serverConnection.connectionId, request)
 	log.Info.Println("Ready to send the service registration request, start waiting for the response result of the service registration.")
-	for {
-		if !s.responses.Has(request.GetRequestId()) {
-			time.Sleep(RequestWaitSleepInterval)
-		}
-		break
-	}
+	s.sendRequest(request, *s.server)
 	log.Info.Println("The service registration has been successful.")
-	s.responses.Remove(request.GetRequestId())
 	go s.heartbeat()
 	return true
 }
@@ -240,14 +226,7 @@ func (s *ServiceInstance) heartbeat() {
 			ServiceInstanceIp:   configuration.ServiceInstanceIp,
 			ServiceInstancePort: configuration.ServiceInstancePort,
 		}))
-		GetServerMessageQueuesInstance().putRequest(s.serverConnection.connectionId, request)
-		for {
-			if !s.responses.Has(request.GetRequestId()) {
-				time.Sleep(RequestWaitSleepInterval)
-			}
-			break
-		}
-		s.responses.Remove(request.GetRequestId())
+		s.sendRequest(request, *s.server)
 		time.Sleep(time.Second * time.Duration(configuration.HeartbeatInterval))
 	}
 }
@@ -267,7 +246,14 @@ func (s *ServiceInstance) Subscribe(serviceName string) *queue.Array[ServiceInst
 	}
 	log.Info.Printf("The service is %s on the server [%v], ready to send a subscription request.", serviceName, utils.ToJson(server))
 	request := NewMessageEntity(pkgrpc.MessageEntity_CLIENT_SUBSCRIBE, utils.Encode(&pkgrpc.SubscribeRequest{ServiceName: serviceName}))
-	response := s.sendRequest(request, server)
+	GetServerMessageQueuesInstance().putRequest(s.serverConnection.connectionId, request)
+	for {
+		if s.responses.Has(request.GetRequestId()) {
+			break
+		}
+		time.Sleep(RequestWaitSleepInterval)
+	}
+	response, _ := s.responses.Get(request.GetRequestId())
 	serviceInstanceAddress := queue.NewArray[ServiceInstanceAddress]()
 	if !response.GetSuccess() {
 		log.Error.Println("Client ")
