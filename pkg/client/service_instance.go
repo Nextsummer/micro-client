@@ -104,7 +104,7 @@ func (s *ServiceInstance) networkIO() {
 			if !ok {
 				continue
 			}
-			log.Info.Println("Receive to server response: ", utils.ToJson(response))
+			//log.Info.Println("Receive to server response: ", utils.ToJson(response))
 			s.responses.Set(response.GetResult().GetRequestId(), response)
 		}
 	}()
@@ -138,7 +138,7 @@ func (s *ServiceInstance) fetchServerNodeId(controllerCandidate config.Server) i
 		utils.Decode(response.GetResult().GetData(), &fetchServerNodeIdResponse)
 		return fetchServerNodeIdResponse.GetServerNodeId()
 	}
-	log.Error.Fatalln("Fetch server node id failed, err: ", response.GetMessage())
+	log.Error.Fatalln("Fetch server node Id failed, err: ", response.GetMessage())
 	return 0
 }
 
@@ -260,7 +260,7 @@ func (s *ServiceInstance) Subscribe(serviceName string) *queue.Array[ServiceInst
 		return serviceInstanceAddress
 	}
 	subscribeResponse := pkgrpc.SubscribeResponse{}
-	utils.BytesToJson(response.GetResult().GetData(), &subscribeResponse)
+	_ = utils.Decode(response.GetResult().GetData(), &subscribeResponse)
 	serviceInstanceAddresses := subscribeResponse.GetServiceInstanceAddresses()
 	for i := range serviceInstanceAddresses {
 		serviceInstanceAddressInfoSplit := strings.Split(serviceInstanceAddresses[i], ",")
@@ -268,7 +268,7 @@ func (s *ServiceInstance) Subscribe(serviceName string) *queue.Array[ServiceInst
 		serviceInstanceAddress.Put(ServiceInstanceAddress{serviceInstanceAddressInfoSplit[0], serviceInstanceAddressInfoSplit[1], int32(port)})
 	}
 	serviceRegistryCached.cache(serviceName, serviceInstanceAddress)
-	log.Info.Printf("Gets the latest instance address list [%s] of the service [%s]", utils.ToJson(serviceInstanceAddress), serviceName)
+	log.Info.Printf("Gets the latest instance address list %s of the service [%s]", serviceInstanceAddress, serviceName)
 	return serviceInstanceAddress
 }
 
@@ -308,9 +308,9 @@ func (r *RunningState) IsRunning() bool {
 }
 
 type ServiceInstanceAddress struct {
-	id          string
-	serviceName string
-	port        int32
+	Id          string `json:"id"`
+	ServiceName string `json:"serviceName"`
+	Port        int32  `json:"port"`
 }
 
 func NewMessageEntity(messageType pkgrpc.MessageEntity_MessageType, data []byte) *pkgrpc.MessageEntity {
