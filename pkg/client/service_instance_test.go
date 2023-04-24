@@ -22,6 +22,7 @@ func TestServiceInstance_Register(t *testing.T) {
 	serviceInstance.Init()
 	serviceInstance.Register()
 	serviceInstance.Subscribe("ORDER-SERVICE")
+	serviceInstance.FetchServiceRegisterAddresses("ORDER-SERVICE2")
 	for {
 		time.Sleep(time.Second * 3)
 	}

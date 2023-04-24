@@ -246,14 +246,8 @@ func (s *ServiceInstance) Subscribe(serviceName string) *queue.Array[ServiceInst
 	}
 	log.Info.Printf("The service is %s on the server [%v], ready to send a subscription request.", serviceName, utils.ToJson(server))
 	request := NewMessageEntity(pkgrpc.MessageEntity_CLIENT_SUBSCRIBE, utils.Encode(&pkgrpc.SubscribeRequest{ServiceName: serviceName}))
-	GetServerMessageQueuesInstance().putRequest(s.serverConnection.connectionId, request)
-	for {
-		if s.responses.Has(request.GetRequestId()) {
-			break
-		}
-		time.Sleep(RequestWaitSleepInterval)
-	}
-	response, _ := s.responses.Get(request.GetRequestId())
+	response := s.sendRequest(request, *s.server)
+
 	serviceInstanceAddress := queue.NewArray[ServiceInstanceAddress]()
 	if !response.GetSuccess() {
 		log.Error.Println("Client ")
@@ -270,6 +264,29 @@ func (s *ServiceInstance) Subscribe(serviceName string) *queue.Array[ServiceInst
 	serviceRegistryCached.cache(serviceName, serviceInstanceAddress)
 	log.Info.Printf("Gets the latest instance address list %s of the service [%s]", serviceInstanceAddress, serviceName)
 	return serviceInstanceAddress
+}
+
+func (s *ServiceInstance) FetchServiceRegisterAddresses(serviceName string) map[string][]pkgrpc.FetchServiceRegisterInfo {
+	response := s.sendRequest(NewMessageEntity(pkgrpc.MessageEntity_CLIENT_FETCH_SERVICE_REGISTER_ADDRESSES,
+		utils.Encode(&pkgrpc.FetchServiceRegisterInfoRequest{ServiceName: serviceName})), *s.server)
+	if !response.GetSuccess() {
+		log.Error.Fatalln("Fetch service register addresses failed, err: ", response.GetMessage())
+	}
+	serviceRegisterInfoResponse := pkgrpc.FetchServiceRegisterInfoResponse{}
+	_ = utils.Decode(response.GetResult().GetData(), &serviceRegisterInfoResponse)
+
+	serviceMap := make(map[string][]pkgrpc.FetchServiceRegisterInfo)
+	if len(serviceRegisterInfoResponse.GetInfo()) > 0 {
+		for _, registerInfo := range serviceRegisterInfoResponse.GetInfo() {
+			serviceName := registerInfo.GetServiceName()
+			if serviceMap[serviceName] == nil {
+				serviceMap[serviceName] = make([]pkgrpc.FetchServiceRegisterInfo, 0)
+			}
+			serviceMap[serviceName] = append(serviceMap[serviceName], *registerInfo)
+		}
+	}
+	log.Info.Println("Fetch service register addresses info: ", utils.ToJson(serviceMap))
+	return serviceMap
 }
 
 // Send the request to the specified server
